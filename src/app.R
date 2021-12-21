@@ -1,10 +1,14 @@
+# Library for shiny
 library(shiny)
 library(shinythemes)
+library(shinyvalidate)
 
+# Libraries for survival analysis
 library(tidyverse)
 library(knitr)
 library(survminer)
 library(survival)
+library(dplyr)
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -29,6 +33,8 @@ ui <- fluidPage(
             uiOutput("time"),
             uiOutput("status"),
             uiOutput("factor"),
+            uiOutput("with"),
+            uiOutput("against"),
             actionButton("submit", label = "Submit", 
                          style="background-color: #337ab7;")
         ),
@@ -42,7 +48,8 @@ ui <- fluidPage(
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
-
+    
+    # Displaying data in a table
     output$contents <- renderDataTable({
         req(input$file1)
         
@@ -114,19 +121,98 @@ server <- function(input, output) {
     
     # Submit action
     observeEvent(input$submit,{
-        print(input$time)
-        print(input$status)
-        #print(input$factor)
+        
+        # Validating fields
+        iv <- InputValidator$new()
+        iv$add_rule("time", function(value){
+            if(value == "Select a field")
+            {
+                "Please select an option"
+            }
+        })
+        iv$add_rule("status", function(value){
+            if(value == "Select a field")
+            {
+                "Please select an option"
+            }
+        })
+        iv$add_rule("factor", function(value){
+            if(value == "Select a field")
+            {
+                "Please select an option"
+            }
+        })
+        iv$add_rule("with", function(value){
+            if(value == "Select a field")
+            {
+                "Please select an option"
+            }
+        })
+        iv$add_rule("against", function(value){
+            if(value == "Select a field")
+            {
+                "Please select an option"
+            }
+        })
+        iv$enable()
+        
+        if(InputValidator$is_valid())
+        {
+            print("Hi")
+        }
+        else
+        {
+            Print("No")
+        }
+        
     })
     
     # Comparing mutations
     observeEvent(input$factor,{
         if(input$factor[1] != "Select a field")
         {
-            
+            output$with <- renderUI({
+                req(input$file1)
+                tryCatch(
+                    {
+                        df <- read.csv(input$file1$datapath)
+                        dataFields <- c("Select a field", "All")
+                        dataFields <- append(dataFields,df[,input$factor[1]])
+                        selectInput("with",
+                                    label = h4("With"),
+                                    choices = dataFields)
+                    },
+                    error = function(e){
+                        stop(safeError(e))
+                    }
+                )
+            })
         }
     })
     
+    ## Select input for "Against"
+    observeEvent(input$with,{
+        if(input$with[1] != "Select a field")
+        {
+            output$against <- renderUI({
+                req(input$file1)
+                tryCatch(
+                    {
+                        df <- read.csv(input$file1$datapath)
+                        dataFields <- c("Select a field", "All")
+                        dataFields <- append(dataFields,df[,input$factor[1]])
+                        dataFields <- dataFields[!dataFields %in% c(input$with)]
+                        selectInput("against",
+                                    label = h4("Against"),
+                                    choices = dataFields)
+                    },
+                    error = function(e){
+                        stop(safeError(e))
+                    }
+                )
+            })
+        }
+    })
 }
 
 # Run the application 
