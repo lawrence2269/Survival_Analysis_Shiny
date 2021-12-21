@@ -1,2 +1,2 @@
-# Survival_Analysis_Shiny_Tutorial
+# Survival analysis in Shiny app
 RShiny application for performing survival analysis
