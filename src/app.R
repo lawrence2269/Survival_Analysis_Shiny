@@ -58,6 +58,7 @@ server <- function(input, output) {
         return(df)
     })
     
+    # Select input for time
     output$time <- renderUI({
         req(input$file1)
         tryCatch(
@@ -75,6 +76,7 @@ server <- function(input, output) {
         )
     })
     
+    # Select input for status
     output$status <- renderUI({
         req(input$file1)
         tryCatch(
@@ -92,6 +94,7 @@ server <- function(input, output) {
         )
     })
     
+    # Select input for factors
     output$factor <- renderUI({
         req(input$file1)
         tryCatch(
@@ -120,7 +123,7 @@ server <- function(input, output) {
     observeEvent(input$factor,{
         if(input$factor[1] != "Select a field")
         {
-            print(input$factor[1])
+            
         }
     })
     
