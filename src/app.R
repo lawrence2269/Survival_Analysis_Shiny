@@ -2,6 +2,8 @@
 library(shiny)
 library(shinythemes)
 library(shinyvalidate)
+library(shinyjs)
+library(shinyalert)
 
 # Libraries for survival analysis
 library(tidyverse)
@@ -14,7 +16,7 @@ library(dplyr)
 ui <- fluidPage(
     #theme
     theme = shinytheme("darkly"),
-    
+    useShinyjs(),  
     # Application title
     titlePanel(
         h1("Survival Analysis", align = "center")),
@@ -35,8 +37,8 @@ ui <- fluidPage(
             uiOutput("factor"),
             uiOutput("with"),
             uiOutput("against"),
-            actionButton("submit", label = "Submit", 
-                         style="background-color: #337ab7;")
+            disabled(actionButton("submit", label = "Submit", 
+                         style="background-color: #337ab7;"))
         ),
 
         # Show a plot of the generated distribution
@@ -56,7 +58,7 @@ server <- function(input, output) {
         tryCatch(
             {
                 df <- read.csv(input$file1$datapath)
-                df$Months = round(df$Months,0)
+                enable("submit")
             },
             error = function(e){
                 stop(safeError(e))
@@ -121,50 +123,30 @@ server <- function(input, output) {
     
     # Submit action
     observeEvent(input$submit,{
-        
-        # Validating fields
-        iv <- InputValidator$new()
-        iv$add_rule("time", function(value){
-            if(value == "Select a field")
-            {
-                "Please select an option"
-            }
-        })
-        iv$add_rule("status", function(value){
-            if(value == "Select a field")
-            {
-                "Please select an option"
-            }
-        })
-        iv$add_rule("factor", function(value){
-            if(value == "Select a field")
-            {
-                "Please select an option"
-            }
-        })
-        iv$add_rule("with", function(value){
-            if(value == "Select a field")
-            {
-                "Please select an option"
-            }
-        })
-        iv$add_rule("against", function(value){
-            if(value == "Select a field")
-            {
-                "Please select an option"
-            }
-        })
-        iv$enable()
-        
-        if(InputValidator$is_valid())
+        if(input$time == "Select a field")
         {
-            print("Hi")
+          shinyalert("Please choose an option for 'Time'", type = "error")
+        }
+        else if(input$status == "Select a field")
+        {
+          shinyalert("Please choose an option for 'Status'", type = "error")
+        }
+        else if(input$factor == "Select a field")
+        {
+          shinyalert("Please choose an option for 'Factor'", type = "error")
+        }
+        else if(input$with == "Select a field")
+        {
+          shinyalert("Please choose an option for 'With'", type = "error")
+        }
+        else if(input$against == "Select a field")
+        {
+          shinyalert("Please choose an option for 'Against'", type = "error")
         }
         else
         {
-            Print("No")
+          print("Hi")
         }
-        
     })
     
     # Comparing mutations
