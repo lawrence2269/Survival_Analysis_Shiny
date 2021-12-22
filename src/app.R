@@ -4,6 +4,7 @@ library(shinythemes)
 library(shinyvalidate)
 library(shinyjs)
 library(shinyalert)
+library(shinydashboard)
 
 # Libraries for survival analysis
 library(tidyverse)
@@ -37,13 +38,26 @@ ui <- fluidPage(
             uiOutput("factor"),
             uiOutput("with"),
             uiOutput("against"),
-            disabled(actionButton("submit", label = "Submit", 
-                         style="background-color: #337ab7;"))
+            div(style="",
+                disabled(actionButton("submit", label = "Submit", 
+                                      style="background-color: #337ab7;")),
+                disabled(actionButton("reset",label = "Reset",
+                                      style="background-color: #337ab7;"))),
+            # disabled(actionButton("submit", label = "Submit", 
+            #              style="background-color: #337ab7;"))
         ),
 
         # Show a plot of the generated distribution
         mainPanel(
-            dataTableOutput("contents")
+            dataTableOutput("contents"),
+            box(
+                title = "Data Table", 
+                status = "warning", 
+                solidHeader = TRUE,
+                width = 6,
+                height = 142,
+                verbatimTextOutput("survivalSummary")
+            )
         )
     )
 )
@@ -59,6 +73,7 @@ server <- function(input, output) {
             {
                 df <- read.csv(input$file1$datapath)
                 enable("submit")
+                enable("reset")
             },
             error = function(e){
                 stop(safeError(e))
@@ -121,6 +136,24 @@ server <- function(input, output) {
         )
     })
     
+    # # Reset action
+    # observeEvent(input$reset,{
+    #     output$contents = renderDataTable(NULL)
+    #     reset("file1")
+    #     reset("time")
+    #     hide("time")
+    #     reset("status")
+    #     hide("status")
+    #     reset("factor")
+    #     hide("factor")
+    #     reset("with")
+    #     hide("with")
+    #     reset("against")
+    #     hide("against")
+    #     disable("submit")
+    #     disable("reset")
+    # })
+    
     # Submit action
     observeEvent(input$submit,{
         if(input$time == "Select a field")
@@ -145,7 +178,52 @@ server <- function(input, output) {
         }
         else
         {
-          print("Hi")
+          # Reading and getting individual columns.
+          df <- read.csv(input$file1$datapath)
+          time = input$time
+          status = input$status
+          factors = input$factor
+          
+          time_data = df[,time]
+          status_data = as.factor(df[,status])
+          factors_data = as.factor(df[,factors])
+          
+          final_data = data.frame(Months = time_data,
+                                  Patient_survival_status = status_data,
+                                  KRAS_mutations = factors_data)
+          
+          # factors_with = df[df[input$factor] == input$with,c(input$factor,input$time,input$status)]
+          # factors_against = df[df[input$factor] == input$against,c(input$factor,input$time,input$status)]
+          # final_data = do.call("rbind",list(factors_with,factors_against))
+          # final_data$status = as.factor(final_data$status)
+          # final_data$factors = as.factor(final_data$factors)
+          print(filter(final_data, input$factor == input$with))
+          # final_data_with = filter(final_data, input$factor == input$with)
+          
+          # final_data_against = final_data[final_data$factors == input$against,]
+          # finalized_data = do.call("rbind",list(final_data_with,final_data_against))
+          # print(str(finalized_data))
+          
+          # Validating selected data datatype
+          # if(!all(sapply(finalized_data[,time],is.numeric)))
+          # {
+          #    shinyalert("Please choose an numeric column for 'Time'", type = "error")
+          # }
+          # else if(!all(sapply(finalized_data[,status],is.factor)))
+          # {
+          #     shinyalert("Please choose a nominal column for 'Status'", type = "error")
+          # }
+          # else if(!all(sapply(finalized_data[,factors],is.factor)))
+          # {
+          #     shinyalert("Please choose a nominal column for 'Factor'", type = "error")
+          # }
+          # else
+          # {
+          #     print("Inside else")
+          #     survival <- Surv(time = finalized_data[,time], event = finalized_data[,status])
+          #     Survfit <- survfit(survival ~ finalized_data[,factors], data = finalized_data)
+          #     output$survivalSummary <- renderPrint({summary(Survfit)})
+          # }
         }
     })
     
