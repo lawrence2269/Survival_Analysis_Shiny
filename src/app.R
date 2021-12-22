@@ -50,12 +50,13 @@ ui <- fluidPage(
         # Show a plot of the generated distribution
         mainPanel(
             dataTableOutput("contents"),
+            #dataTableOutput("survivalSummary")
             box(
-                title = "Data Table", 
-                status = "warning", 
+                title = "Data Table",
+                status = "warning",
                 solidHeader = TRUE,
-                width = 6,
-                height = 142,
+                width = 200,
+                height = 25,
                 verbatimTextOutput("survivalSummary")
             )
         )
@@ -192,38 +193,39 @@ server <- function(input, output) {
                                   Patient_survival_status = status_data,
                                   KRAS_mutations = factors_data)
           
-          # factors_with = df[df[input$factor] == input$with,c(input$factor,input$time,input$status)]
-          # factors_against = df[df[input$factor] == input$against,c(input$factor,input$time,input$status)]
-          # final_data = do.call("rbind",list(factors_with,factors_against))
-          # final_data$status = as.factor(final_data$status)
-          # final_data$factors = as.factor(final_data$factors)
-          print(filter(final_data, input$factor == input$with))
-          # final_data_with = filter(final_data, input$factor == input$with)
-          
-          # final_data_against = final_data[final_data$factors == input$against,]
-          # finalized_data = do.call("rbind",list(final_data_with,final_data_against))
-          # print(str(finalized_data))
+          finalized_data = final_data %>% select(Months,Patient_survival_status,KRAS_mutations) %>%
+                 filter(KRAS_mutations %in% c(input$with,input$against))
           
           # Validating selected data datatype
-          # if(!all(sapply(finalized_data[,time],is.numeric)))
-          # {
-          #    shinyalert("Please choose an numeric column for 'Time'", type = "error")
-          # }
-          # else if(!all(sapply(finalized_data[,status],is.factor)))
-          # {
-          #     shinyalert("Please choose a nominal column for 'Status'", type = "error")
-          # }
-          # else if(!all(sapply(finalized_data[,factors],is.factor)))
-          # {
-          #     shinyalert("Please choose a nominal column for 'Factor'", type = "error")
-          # }
-          # else
-          # {
-          #     print("Inside else")
-          #     survival <- Surv(time = finalized_data[,time], event = finalized_data[,status])
-          #     Survfit <- survfit(survival ~ finalized_data[,factors], data = finalized_data)
-          #     output$survivalSummary <- renderPrint({summary(Survfit)})
-          # }
+          if(!all(sapply(finalized_data[,time],is.numeric)))
+          {
+             shinyalert("Please choose an numeric column for 'Time'", type = "error")
+          }
+          else if(!all(sapply(finalized_data[,status],is.factor)))
+          {
+              shinyalert("Please choose a nominal column for 'Status'", type = "error")
+          }
+          else if(!all(sapply(finalized_data[,factors],is.factor)))
+          {
+              shinyalert("Please choose a nominal column for 'Factor'", type = "error")
+          }
+          else
+          {
+              print("Inside else")
+              time_data = finalized_data[,time]
+              status_data = finalized_data[,status]
+              factor_data = finalized_data[,factors]
+              survival <- Surv(time = time_data, event = status_data)
+              Survfit <- survfit(survival ~ factor_data, data = finalized_data)
+              res <- summary(Survfit)
+              # output$survivalSummary <- renderDataTable({
+              #     cols <- lapply(c(2:6, 8:11) , function(x) res[x])
+              #     tbl <- do.call(data.frame, cols)
+              #     #tbl$strata <- strsplit(as.character(tbl$strata),"=")[[1]][2]
+              #     return(tbl)
+              # })
+              output$survivalSummary <- renderPrint({summary(Survfit)})
+          }
         }
     })
     
