@@ -184,40 +184,44 @@ server <- function(input, output) {
         {
           # Reading and getting individual columns.
           df <- read.csv(input$file1$datapath)
-          time = input$time
-          status = input$status
-          factors = input$factor
+          time = as.character(input$time)
+          status = as.character(input$status)
+          factors = as.character(input$factor)
           
           time_data = df[,time]
           status_data = as.factor(df[,status])
           factors_data = as.factor(df[,factors])
           
-          final_data = data.frame(Months = time_data,
-                                  Patient_survival_status = status_data,
-                                  KRAS_mutations = factors_data)
+          final_data = data.frame(time = time_data,
+                                  status = status_data,
+                                  factors = factors_data)
           
-          finalized_data = final_data %>% select(Months,Patient_survival_status,KRAS_mutations) %>%
-                 filter(KRAS_mutations %in% c(input$with,input$against))
+          finalized_data = final_data %>% select(time,
+                                                 status,
+                                                 factors) %>%
+                 filter(factors %in% c(input$with,input$against))
+          
+          print(nrow(finalized_data))
           
           # Validating selected data datatype
-          if(!all(sapply(finalized_data[,time],is.numeric)))
+          if(!all(sapply(finalized_data$time,is.numeric)))
           {
              shinyalert("Please choose an numeric column for 'Time'", type = "error")
           }
-          else if(!all(sapply(finalized_data[,status],is.factor)))
+          else if(!all(sapply(finalized_data$status,is.factor)))
           {
               shinyalert("Please choose a nominal column for 'Status'", type = "error")
           }
-          else if(!all(sapply(finalized_data[,factors],is.factor)))
+          else if(!all(sapply(finalized_data$factors,is.factor)))
           {
               shinyalert("Please choose a nominal column for 'Factor'", type = "error")
           }
           else
           {
               print("Inside else")
-              time_data = finalized_data[,time]
-              status_data = finalized_data[,status]
-              factor_data = finalized_data[,factors]
+              time_data = finalized_data$time
+              status_data = finalized_data$status
+              factor_data = finalized_data$factors
               survival <- Surv(time = time_data, event = status_data)
               Survfit <- survfit(survival ~ factor_data, data = finalized_data)
               res <- summary(Survfit)
@@ -229,7 +233,9 @@ server <- function(input, output) {
               # })
               tbl <- Survfit %>% tidy()
               tbl$strata <- strsplit(as.character(tbl$strata),"=")[[1]][2]
-              output$survivalSummary <- renderDataTable({return(tbl)})
+              output$survivalSummary <- renderDataTable({
+                return(tbl)
+              })
               #output$survivalSummary <- renderPrint({summary(Survfit)})
           }
         }
