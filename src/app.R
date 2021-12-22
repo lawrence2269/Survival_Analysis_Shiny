@@ -12,6 +12,8 @@ library(knitr)
 library(survminer)
 library(survival)
 library(dplyr)
+library(broom)
+
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -50,15 +52,16 @@ ui <- fluidPage(
         # Show a plot of the generated distribution
         mainPanel(
             dataTableOutput("contents"),
-            #dataTableOutput("survivalSummary")
-            box(
-                title = "Data Table",
-                status = "warning",
-                solidHeader = TRUE,
-                width = 200,
-                height = 25,
-                verbatimTextOutput("survivalSummary")
-            )
+            br(),
+            dataTableOutput("survivalSummary")
+            # box(
+            #     title = "Data Table",
+            #     status = "warning",
+            #     solidHeader = TRUE,
+            #     width = 200,
+            #     height = 25,
+            #     verbatimTextOutput("survivalSummary")
+            # )
         )
     )
 )
@@ -224,7 +227,10 @@ server <- function(input, output) {
               #     #tbl$strata <- strsplit(as.character(tbl$strata),"=")[[1]][2]
               #     return(tbl)
               # })
-              output$survivalSummary <- renderPrint({summary(Survfit)})
+              tbl <- Survfit %>% tidy()
+              tbl$strata <- strsplit(as.character(tbl$strata),"=")[[1]][2]
+              output$survivalSummary <- renderDataTable({return(tbl)})
+              #output$survivalSummary <- renderPrint({summary(Survfit)})
           }
         }
     })
