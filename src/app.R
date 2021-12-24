@@ -13,6 +13,7 @@ library(survminer)
 library(survival)
 library(dplyr)
 library(broom)
+library(ggplot2)
 
 
 # Define UI for application that draws a histogram
@@ -225,55 +226,56 @@ server <- function(input, output) {
               status_data = finalized_data$status
               factor_data = str_split(finalized_data$factors,"_",simplify = T)[,1]
               survival <- Surv(time = time_data, event = status_data)
-              Survfit <- survfit(survival ~ factor_data, data = finalized_data)
+              Survfit <- do.call(survfit,list(formula = Surv(time = time_data, event = status_data) ~ factor_data, data = finalized_data))
+              #Survfit <- survfit(survival ~ factor_data, data = finalized_data)
+              print("After Survfit")
               res <- summary(Survfit)
               cols <- lapply(c(2:10,15,16) , function(x) res[x])
               tbl <- do.call(data.frame, cols)
               head(tbl)
               tbl$strata <- str_split(as.character(tbl$strata),"=",simplify = T)[,2]
+              
               output$survivalSummary <- renderDataTable({
                 return(tbl)
               })
-              
               # Rendering Kaplan-Meier plot
               output$kaplan_meier_plot = renderPlot({
-                  survival_plot <- ggsurvplot(fit = Survfit, 
-                             data = finalized_data,
-                             ####### Format Title #######
-                             title = "Overall Survival",
-                             subtitle = "Stratified By Mutations",
-                             font.title = c(22, "bold", "black"),
-                             ggtheme = theme_classic() + theme(plot.title = element_text(hjust = 0.5, face = "bold"))+ # theme_classic will give a white background with no lines on the plot
-                                 theme(plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic")), 
-                             ####### Format Axes #######
-                             xlab="Months", # changes xlabel,
-                             ylab = "Survival Probability",
-                             font.x=c(18,"bold"), # changes x axis labels
-                             font.y=c(18,"bold"), # changes y axis labels
-                             font.xtickslab=c(14,"plain"), # changes the tick label on x axis
-                             font.ytickslab=c(14,"plain"),
-                             ####### Format Curve Lines #######
-                             palette = c("red","black"),
-                             ####### Censor Details ########
-                             censor = TRUE, # logical value. If TRUE, censors will be drawn,
-                             censor.shape="|",
-                             censor.size = 5,
-                             ####### Confidence Intervals ########
-                             conf.int = FALSE, # To Remove conf intervals use "FALSE"
-                             conf.int.fill = "purple", # fill color to be used for confidence interval
-                             surv.median.line = "hv", # allowed values include one of c("none", "hv", "h", "v"). v: vertical, h:horizontal
-                             ######## Format Legend #######
-                             legend = "top", # If you'd prefer more space for your plot, consider removing the legend
-                             #legend.title = "All Patients",
-                             legend.labs = c(input$with,input$against), # Change the Strata Legend
-                             ######## Risk Table #######
-                             risk.table = TRUE, # Adds Risk Table
-                             risk.table.height = 0.30 # Adjusts the height of the risk table (default is 0.25)
-                  )
-                  survival_plot$plot <- survival_plot$plot + scale_x_continuous(expand=c(0,0))
-                  return(survival_plot)
+                survival_plot <- ggsurvplot(fit = Survfit, 
+                                            data = finalized_data,
+                                            ####### Format Title #######
+                                            title = "Overall Survival",
+                                            subtitle = "Stratified By Mutations",
+                                            font.title = c(22, "bold", "black"),
+                                            ggtheme = theme_classic() + theme(plot.title = element_text(hjust = 0.5, face = "bold"))+ # theme_classic will give a white background with no lines on the plot
+                                              theme(plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic")), 
+                                            ####### Format Axes #######
+                                            xlab="Months", # changes xlabel,
+                                            ylab = "Survival Probability",
+                                            font.x=c(18,"bold"), # changes x axis labels
+                                            font.y=c(18,"bold"), # changes y axis labels
+                                            font.xtickslab=c(14,"plain"), # changes the tick label on x axis
+                                            font.ytickslab=c(14,"plain"),
+                                            ####### Format Curve Lines #######
+                                            palette = c("red","black"),
+                                            ####### Censor Details ########
+                                            censor = TRUE, # logical value. If TRUE, censors will be drawn,
+                                            censor.shape="|",
+                                            censor.size = 5,
+                                            ####### Confidence Intervals ########
+                                            conf.int = FALSE, # To Remove conf intervals use "FALSE"
+                                            conf.int.fill = "purple", # fill color to be used for confidence interval
+                                            surv.median.line = "hv", # allowed values include one of c("none", "hv", "h", "v"). v: vertical, h:horizontal
+                                            ######## Format Legend #######
+                                            legend = "top", # If you'd prefer more space for your plot, consider removing the legend
+                                            #legend.title = "All Patients",
+                                            legend.labs = c(input$with,input$against), # Change the Strata Legend
+                                            ######## Risk Table #######
+                                            risk.table = TRUE, # Adds Risk Table
+                                            risk.table.height = 0.30 # Adjusts the height of the risk table (default is 0.25)
+                )
+                survival_plot$plot <- survival_plot$plot + scale_x_continuous(expand=c(0,0))
+                return(survival_plot)
               })
-              #output$survivalSummary <- renderPrint({summary(Survfit)})
           # }
         }
     })
