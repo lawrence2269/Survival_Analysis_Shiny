@@ -28,19 +28,20 @@ ui <- fluidPage(
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
-            h3("Inputs"),
-            br(),
-            fileInput("file1", "Choose CSV File",
-                      multiple = FALSE,
-                      accept = c("text/csv",
-                                 "text/comma-separated-values,text/plain",
-                                 ".csv")),
-            br(),
-            uiOutput("time"),
-            uiOutput("status"),
-            uiOutput("factor"),
-            uiOutput("with"),
-            uiOutput("against"),
+            div(id = "form",
+                h3("Inputs"),
+                br(),
+                fileInput("file1", "Choose CSV File",
+                          multiple = FALSE,
+                          accept = c("text/csv",
+                                     "text/comma-separated-values,text/plain",
+                                     ".csv")),
+                br(),
+                uiOutput("time"),
+                uiOutput("status"),
+                uiOutput("factor"),
+                uiOutput("with"),
+                uiOutput("against")),
             div(style="",
                 disabled(actionButton("submit", label = "Submit", 
                                       style="background-color: #337ab7;")),
@@ -54,6 +55,10 @@ ui <- fluidPage(
         mainPanel(
             hidden(dataTableOutput("contents")),
             br(),
+            uiOutput("case_table_heading"),
+            br(),
+            dataTableOutput("case_table"),
+            br(),
             dataTableOutput("survivalSummary"),
             br(),
             plotOutput("kaplan_meier_plot")
@@ -64,6 +69,8 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram
 server <- function(input, output) {
     
+    uiValues <- reactiveValues(kaplan_meier_plot = NULL)
+  
     observe({
         if(!is.null(input$file1$datapath))
         {
@@ -187,22 +194,22 @@ server <- function(input, output) {
         {
           # Reading and getting individual columns.
           df <- read.csv(input$file1$datapath)
-          time = as.character(input$time)
-          status = as.character(input$status)
-          factors = as.character(input$factor)
+          time <- as.character(input$time)
+          status <- as.character(input$status)
+          factors <- as.character(input$factor)
           
-          time_data = df[,time]
+          time_data <- df[,time]
           # status_data = as.factor(df[,status])
           # factors_data = as.factor(df[,factors])
           
-          status_data = df[,status]
-          factors_data = df[,factors]
+          status_data <- df[,status]
+          factors_data <- df[,factors]
           
-          final_data = data.frame(time = time_data,
+          final_data <- data.frame(time = time_data,
                                   status = status_data,
                                   factors = factors_data)
           
-          finalized_data = final_data %>% select(time,
+          finalized_data <- final_data %>% select(time,
                                                  status,
                                                  factors) %>%
                  filter(factors %in% c(input$with,input$against))
@@ -222,60 +229,153 @@ server <- function(input, output) {
           # }
           # else
           # {
-              time_data = finalized_data$time
-              status_data = finalized_data$status
-              factor_data = str_split(finalized_data$factors,"_",simplify = T)[,1]
+              time_data <- finalized_data$time
+              status_data <- finalized_data$status
+              #factor_data = str_split(finalized_data$factors,"_",simplify = T)[,1]
+              factor_data <- finalized_data$factors
               survival <- Surv(time = time_data, event = status_data)
               Survfit <- do.call(survfit,list(formula = Surv(time = time_data, event = status_data) ~ factor_data, data = finalized_data))
               #Survfit <- survfit(survival ~ factor_data, data = finalized_data)
-              print("After Survfit")
               res <- summary(Survfit)
               cols <- lapply(c(2:10,15,16) , function(x) res[x])
               tbl <- do.call(data.frame, cols)
               head(tbl)
               tbl$strata <- str_split(as.character(tbl$strata),"=",simplify = T)[,2]
               
+              ## Case processing summary table
+              col_1 <- c(input$with,input$against,"Overall")
+              col_2 <- c(nrow(finalized_data[finalized_data$input$factor == input$with,]),
+                        nrow(finalized_data[finalized_data$input$factor == input$against,]),
+                        nrow(finalized_data))
+              col_3 <- c(nrow(finalized_data[finalized_data$input$factor == input$with &&
+                                              finalized_data$input$status == 
+                                              levels(as.factor(finalized_data$input$factors))[1],]),
+                        nrow(finalized_data[finalized_data$input$factor == input$against &&
+                                              finalized_data$input$status == 
+                                              levels(as.factor(finalized_data$input$factors))[1],]),
+                        nrow(finalized_data[finalized_data$input$factor == input$with &&
+                                              finalized_data$input$status == 
+                                              levels(as.factor(finalized_data$input$factors))[1],]) + 
+                        nrow(finalized_data[finalized_data$input$factor == input$against &&
+                                                finalized_data$input$status == 
+                                                levels(as.factor(finalized_data$input$factors))[1],]))
+              col_4 <- c(nrow(finalized_data[finalized_data$input$factor == input$with &&
+                                              finalized_data$input$status == 
+                                              levels(as.factor(finalized_data$input$factors))[2],]),
+                        nrow(finalized_data[finalized_data$input$factor == input$against &&
+                                              finalized_data$input$status == 
+                                              levels(as.factor(finalized_data$input$factors))[2],]),
+                        nrow(finalized_data[finalized_data$input$factor == input$with &&
+                                              finalized_data$input$status == 
+                                              levels(as.factor(finalized_data$input$factors))[2],]) + 
+                        nrow(finalized_data[finalized_data$input$factor == input$against &&
+                                              finalized_data$input$status == 
+                                              levels(as.factor(finalized_data$input$factors))[2],]))
+              col_5 <- c(paste(round((col_4[1]/col_2[1])*100,1),"%"),
+                        paste(round((col_4[2]/col_2[2])*100,1),"%"),
+                        paste(round(((col_4[1]+col_4[2])/(col_2[1]+col_2[2]))*100,1),"%"))
+              
+              caseTable <- data.frame(factors = col_1,
+                                      "Total_N" = col_2,
+                                      "N_of_Events" = col_3,
+                                      "N_Censored" = col_4,
+                                      "Percent" = col_5)
+              
+              output$case_table_heading <- renderUI({
+                h3("Case Processing Summary")
+              })
+              
+              output$case_table <- renderDataTable({
+                return(caseTable)
+              })
+              
               output$survivalSummary <- renderDataTable({
                 return(tbl)
               })
-              # Rendering Kaplan-Meier plot
-              output$kaplan_meier_plot = renderPlot({
-                survival_plot <- ggsurvplot(fit = Survfit, 
-                                            data = finalized_data,
-                                            ####### Format Title #######
-                                            title = "Overall Survival",
-                                            subtitle = "Stratified By Mutations",
-                                            font.title = c(22, "bold", "black"),
-                                            ggtheme = theme_classic() + theme(plot.title = element_text(hjust = 0.5, face = "bold"))+ # theme_classic will give a white background with no lines on the plot
-                                              theme(plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic")), 
-                                            ####### Format Axes #######
-                                            xlab="Months", # changes xlabel,
-                                            ylab = "Survival Probability",
-                                            font.x=c(18,"bold"), # changes x axis labels
-                                            font.y=c(18,"bold"), # changes y axis labels
-                                            font.xtickslab=c(14,"plain"), # changes the tick label on x axis
-                                            font.ytickslab=c(14,"plain"),
-                                            ####### Format Curve Lines #######
-                                            palette = c("red","black"),
-                                            ####### Censor Details ########
-                                            censor = TRUE, # logical value. If TRUE, censors will be drawn,
-                                            censor.shape="|",
-                                            censor.size = 5,
-                                            ####### Confidence Intervals ########
-                                            conf.int = FALSE, # To Remove conf intervals use "FALSE"
-                                            conf.int.fill = "purple", # fill color to be used for confidence interval
-                                            surv.median.line = "hv", # allowed values include one of c("none", "hv", "h", "v"). v: vertical, h:horizontal
-                                            ######## Format Legend #######
-                                            legend = "top", # If you'd prefer more space for your plot, consider removing the legend
-                                            #legend.title = "All Patients",
-                                            legend.labs = c(input$with,input$against), # Change the Strata Legend
-                                            ######## Risk Table #######
-                                            risk.table = TRUE, # Adds Risk Table
-                                            risk.table.height = 0.30 # Adjusts the height of the risk table (default is 0.25)
-                )
-                survival_plot$plot <- survival_plot$plot + scale_x_continuous(expand=c(0,0))
-                return(survival_plot)
+              print(res)
+              uiValues$kaplan_meier_plot <- ggsurvplot(fit = Survfit, 
+                                          data = finalized_data,
+                                          ####### Format Title #######
+                                          title = "Overall Survival",
+                                          subtitle = "Stratified By Mutations",
+                                          font.title = c(22, "bold", "black"),
+                                          ggtheme = theme_classic() + theme(plot.title = element_text(hjust = 0.5, face = "bold"))+ # theme_classic will give a white background with no lines on the plot
+                                            theme(plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic")), 
+                                          ####### Format Axes #######
+                                          xlab="Months", # changes xlabel,
+                                          ylab = "Survival Probability",
+                                          font.x=c(18,"bold"), # changes x axis labels
+                                          font.y=c(18,"bold"), # changes y axis labels
+                                          font.xtickslab=c(14,"plain"), # changes the tick label on x axis
+                                          font.ytickslab=c(14,"plain"),
+                                          ####### Format Curve Lines #######
+                                          palette = c("red","black"),
+                                          ####### Censor Details ########
+                                          censor = TRUE, # logical value. If TRUE, censors will be drawn,
+                                          censor.shape="|",
+                                          censor.size = 5,
+                                          ####### Confidence Intervals ########
+                                          conf.int = FALSE, # To Remove conf intervals use "FALSE"
+                                          conf.int.fill = "purple", # fill color to be used for confidence interval
+                                          surv.median.line = "hv", # allowed values include one of c("none", "hv", "h", "v"). v: vertical, h:horizontal
+                                          ######## Format Legend #######
+                                          legend = "top", # If you'd prefer more space for your plot, consider removing the legend
+                                          #legend.title = "All Patients",
+                                          legend.labs = c(input$with,input$against), # Change the Strata Legend
+                                          ######## Risk Table #######
+                                          risk.table = TRUE, # Adds Risk Table
+                                          risk.table.height = 0.25 # Adjusts the height of the risk table (default is 0.25)
+              )
+              uiValues$kaplan_meier_plot$plot <- uiValues$kaplan_meier_plot$plot + scale_x_continuous(expand=c(0,0))
+              output$kaplan_meier_plot <- renderPlot({
+                if(is.null(uiValues$kaplan_meier_plot))
+                {
+                    return()
+                }
+                else
+                {
+                  uiValues$kaplan_meier_plot
+                }
               })
+              # Rendering Kaplan-Meier plot
+              # output$kaplan_meier_plot = renderPlot({
+              #   survival_plot <- ggsurvplot(fit = Survfit, 
+              #                               data = finalized_data,
+              #                               ####### Format Title #######
+              #                               title = "Overall Survival",
+              #                               subtitle = "Stratified By Mutations",
+              #                               font.title = c(22, "bold", "black"),
+              #                               ggtheme = theme_classic() + theme(plot.title = element_text(hjust = 0.5, face = "bold"))+ # theme_classic will give a white background with no lines on the plot
+              #                                 theme(plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic")), 
+              #                               ####### Format Axes #######
+              #                               xlab="Months", # changes xlabel,
+              #                               ylab = "Survival Probability",
+              #                               font.x=c(18,"bold"), # changes x axis labels
+              #                               font.y=c(18,"bold"), # changes y axis labels
+              #                               font.xtickslab=c(14,"plain"), # changes the tick label on x axis
+              #                               font.ytickslab=c(14,"plain"),
+              #                               ####### Format Curve Lines #######
+              #                               palette = c("red","black"),
+              #                               ####### Censor Details ########
+              #                               censor = TRUE, # logical value. If TRUE, censors will be drawn,
+              #                               censor.shape="|",
+              #                               censor.size = 5,
+              #                               ####### Confidence Intervals ########
+              #                               conf.int = FALSE, # To Remove conf intervals use "FALSE"
+              #                               conf.int.fill = "purple", # fill color to be used for confidence interval
+              #                               surv.median.line = "hv", # allowed values include one of c("none", "hv", "h", "v"). v: vertical, h:horizontal
+              #                               ######## Format Legend #######
+              #                               legend = "top", # If you'd prefer more space for your plot, consider removing the legend
+              #                               #legend.title = "All Patients",
+              #                               legend.labs = c(input$with,input$against), # Change the Strata Legend
+              #                               ######## Risk Table #######
+              #                               risk.table = TRUE, # Adds Risk Table
+              #                               risk.table.height = 0.25 # Adjusts the height of the risk table (default is 0.25)
+              #   )
+              #   survival_plot$plot <- survival_plot$plot + scale_x_continuous(expand=c(0,0))
+              #   return(survival_plot)
+              # })
+              #reset("form")
           # }
         }
     })
@@ -289,7 +389,7 @@ server <- function(input, output) {
                 tryCatch(
                     {
                         df <- read.csv(input$file1$datapath)
-                        dataFields <- c("Select a field", "All")
+                        dataFields <- c("Select a field")
                         dataFields <- append(dataFields,df[,input$factor[1]])
                         selectInput("with",
                                     label = h4("With"),
@@ -312,7 +412,7 @@ server <- function(input, output) {
                 tryCatch(
                     {
                         df <- read.csv(input$file1$datapath)
-                        dataFields <- c("Select a field", "All")
+                        dataFields <- c("Select a field")
                         dataFields <- append(dataFields,df[,input$factor[1]])
                         dataFields <- dataFields[!dataFields %in% c(input$with)]
                         selectInput("against",
