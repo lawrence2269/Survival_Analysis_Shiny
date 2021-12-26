@@ -55,9 +55,7 @@ ui <- fluidPage(
         mainPanel(
             hidden(dataTableOutput("contents")),
             br(),
-            uiOutput("case_table_heading"),
-            br(),
-            dataTableOutput("case_table"),
+            uiOutput("summary_table_heading"),
             br(),
             dataTableOutput("survivalSummary"),
             br(),
@@ -69,7 +67,7 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram
 server <- function(input, output) {
     
-    uiValues <- reactiveValues(kaplan_meier_plot = NULL)
+    uiValues <- reactiveValues(km_plot = NULL)
   
     observe({
         if(!is.null(input$file1$datapath))
@@ -242,62 +240,24 @@ server <- function(input, output) {
               head(tbl)
               tbl$strata <- str_split(as.character(tbl$strata),"=",simplify = T)[,2]
               
-              ## Case processing summary table
-              col_1 <- c(input$with,input$against,"Overall")
-              col_2 <- c(nrow(finalized_data[finalized_data$input$factor == input$with,]),
-                        nrow(finalized_data[finalized_data$input$factor == input$against,]),
-                        nrow(finalized_data))
-              col_3 <- c(nrow(finalized_data[finalized_data$input$factor == input$with &&
-                                              finalized_data$input$status == 
-                                              levels(as.factor(finalized_data$input$factors))[1],]),
-                        nrow(finalized_data[finalized_data$input$factor == input$against &&
-                                              finalized_data$input$status == 
-                                              levels(as.factor(finalized_data$input$factors))[1],]),
-                        nrow(finalized_data[finalized_data$input$factor == input$with &&
-                                              finalized_data$input$status == 
-                                              levels(as.factor(finalized_data$input$factors))[1],]) + 
-                        nrow(finalized_data[finalized_data$input$factor == input$against &&
-                                                finalized_data$input$status == 
-                                                levels(as.factor(finalized_data$input$factors))[1],]))
-              col_4 <- c(nrow(finalized_data[finalized_data$input$factor == input$with &&
-                                              finalized_data$input$status == 
-                                              levels(as.factor(finalized_data$input$factors))[2],]),
-                        nrow(finalized_data[finalized_data$input$factor == input$against &&
-                                              finalized_data$input$status == 
-                                              levels(as.factor(finalized_data$input$factors))[2],]),
-                        nrow(finalized_data[finalized_data$input$factor == input$with &&
-                                              finalized_data$input$status == 
-                                              levels(as.factor(finalized_data$input$factors))[2],]) + 
-                        nrow(finalized_data[finalized_data$input$factor == input$against &&
-                                              finalized_data$input$status == 
-                                              levels(as.factor(finalized_data$input$factors))[2],]))
-              col_5 <- c(paste(round((col_4[1]/col_2[1])*100,1),"%"),
-                        paste(round((col_4[2]/col_2[2])*100,1),"%"),
-                        paste(round(((col_4[1]+col_4[2])/(col_2[1]+col_2[2]))*100,1),"%"))
-              
-              caseTable <- data.frame(factors = col_1,
-                                      "Total_N" = col_2,
-                                      "N_of_Events" = col_3,
-                                      "N_Censored" = col_4,
-                                      "Percent" = col_5)
-              
-              output$case_table_heading <- renderUI({
-                h3("Case Processing Summary")
+              output$summary_table_heading <- renderUI({
+                h3("Survival analysis summary")
               })
               
-              output$case_table <- renderDataTable({
-                return(caseTable)
-              })
+              # output$case_table <- renderDataTable({
+              #   return(caseTable)
+              # })
               
               output$survivalSummary <- renderDataTable({
                 return(tbl)
               })
-              print(res)
-              uiValues$kaplan_meier_plot <- ggsurvplot(fit = Survfit, 
+              
+              uiValues$km_plot <- ggsurvplot(fit = Survfit, 
                                           data = finalized_data,
                                           ####### Format Title #######
                                           title = "Overall Survival",
                                           subtitle = "Stratified By Mutations",
+                                          pval = T,
                                           font.title = c(22, "bold", "black"),
                                           ggtheme = theme_classic() + theme(plot.title = element_text(hjust = 0.5, face = "bold"))+ # theme_classic will give a white background with no lines on the plot
                                             theme(plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic")), 
@@ -326,17 +286,19 @@ server <- function(input, output) {
                                           risk.table = TRUE, # Adds Risk Table
                                           risk.table.height = 0.25 # Adjusts the height of the risk table (default is 0.25)
               )
-              uiValues$kaplan_meier_plot$plot <- uiValues$kaplan_meier_plot$plot + scale_x_continuous(expand=c(0,0))
+              uiValues$km_plot$plot <- uiValues$km_plot$plot + scale_x_continuous(expand=c(0,0))
+              
               output$kaplan_meier_plot <- renderPlot({
-                if(is.null(uiValues$kaplan_meier_plot))
+                if(is.null(uiValues$km_plot))
                 {
                     return()
                 }
                 else
                 {
-                  uiValues$kaplan_meier_plot
+                  uiValues$km_plot
                 }
               })
+              
               # Rendering Kaplan-Meier plot
               # output$kaplan_meier_plot = renderPlot({
               #   survival_plot <- ggsurvplot(fit = Survfit, 
