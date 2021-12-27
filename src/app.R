@@ -14,6 +14,7 @@ library(survival)
 library(dplyr)
 library(broom)
 library(ggplot2)
+library(comprehenr)
 
 
 # Define UI for application that draws a histogram
@@ -40,8 +41,11 @@ ui <- fluidPage(
                 uiOutput("time"),
                 uiOutput("status"),
                 uiOutput("factor"),
-                uiOutput("with"),
-                uiOutput("against")),
+                conditionalPanel(
+                  condition = "input.factor != 1",
+                  uiOutput("with"),
+                  uiOutput("against")
+                )),
             div(style="",
                 disabled(actionButton("submit", label = "Submit", 
                                       style="background-color: #337ab7;")),
@@ -75,7 +79,7 @@ ui <- fluidPage(
 )
 
 # Define server logic required to draw a histogram
-server <- function(input, output) {
+server <- function(input, output, session) {
     
     uiValues <- reactiveValues(km_plot = NULL)
   
@@ -146,7 +150,7 @@ server <- function(input, output) {
         tryCatch(
             {
                 df <- read.csv(input$file1$datapath)
-                dataFields <- c("Select a field",1)
+                dataFields <- c("Select a field","1")
                 dataFields <- append(dataFields,colnames(df))
                 selectInput("factor",
                             label = h3("Factor"),
@@ -158,23 +162,13 @@ server <- function(input, output) {
         )
     })
     
-    # # Reset action
-    # observeEvent(input$reset,{
-    #     output$contents = renderDataTable(NULL)
-    #     reset("file1")
-    #     reset("time")
-    #     hide("time")
-    #     reset("status")
-    #     hide("status")
-    #     reset("factor")
-    #     hide("factor")
-    #     reset("with")
-    #     hide("with")
-    #     reset("against")
-    #     hide("against")
-    #     disable("submit")
-    #     disable("reset")
-    # })
+    # Reset action
+    observeEvent(input$reset,{
+        output$contents = renderDataTable(NULL)
+        updateSelectInput(session,"time",selected = "Select a field")
+        updateSelectInput(session,"status",selected = "Select a field")
+        updateSelectInput(session,"factor",selected = "Select a field")
+    })
     
     # Submit action
     observeEvent(input$submit,{
@@ -201,6 +195,7 @@ server <- function(input, output) {
         else
         {
           # Reading and getting individual columns.
+          print("Inside else")
           df <- read.csv(input$file1$datapath)
           time <- as.character(input$time)
           status <- as.character(input$status)
@@ -216,173 +211,181 @@ server <- function(input, output) {
           final_data <- data.frame(time = time_data,
                                   status = status_data,
                                   factors = factors_data)
-          
+          if(factors == 1)
+          {
+            time_data <- final_data$time
+            status_data <- final_data$status
+            factor_data <- as.factor(final_data$factors)
+            survival <- Surv(time = time_data, event = status_data)
+            Survfit <- do.call(survfit,list(formula = Surv(time = time_data, event = status_data) ~ factor_data, data = final_data))
+            res <- summary(Survfit)
+            
+            cols <- lapply(c(2:10,15,16) , function(x) res[x])
+            tbl <- do.call(data.frame, cols)
+            head(tbl)
+            tbl$strata <- str_split(as.character(tbl$strata),"=",simplify = T)[,2]
+            
+            output$summary_table_heading <- renderUI({
+              h3("Survival analysis summary")
+            })
+            
+            output$survivalSummary <- renderDataTable({
+              return(tbl)
+            })
+          }
           finalized_data <- final_data %>% select(time,
                                                  status,
                                                  factors) %>%
                  filter(factors %in% c(input$with,input$against))
           
-          # Validating selected data datatype
-          # if(!all(sapply(finalized_data$time,is.numeric)))
-          # {
-          #    shinyalert("Please choose an numeric column for 'Time'", type = "error")
-          # }
-          # else if(!all(sapply(finalized_data$status,is.factor)))
-          # {
-          #     shinyalert("Please choose a nominal column for 'Status'", type = "error")
-          # }
-          # else if(!all(sapply(finalized_data$factors,is.factor)))
-          # {
-          #     shinyalert("Please choose a nominal column for 'Factor'", type = "error")
-          # }
-          # else
-          # {
-              time_data <- finalized_data$time
-              status_data <- finalized_data$status
-              #factor_data = str_split(finalized_data$factors,"_",simplify = T)[,1]
-              factor_data <- as.factor(finalized_data$factors)
-              survival <- Surv(time = time_data, event = status_data)
-              Survfit <- do.call(survfit,list(formula = Surv(time = time_data, event = status_data) ~ factor_data, data = finalized_data))
-              #Survfit <- survfit(survival ~ factor_data, data = finalized_data)
-              res <- summary(Survfit)
-              cols <- lapply(c(2:10,15,16) , function(x) res[x])
-              tbl <- do.call(data.frame, cols)
-              head(tbl)
-              tbl$strata <- str_split(as.character(tbl$strata),"=",simplify = T)[,2]
-              
-              output$summary_table_heading <- renderUI({
-                h3("Survival analysis summary")
-              })
-              
-              output$survivalSummary <- renderDataTable({
-                return(tbl)
-              })
-              
-              # Mean of survival table
-              mean_survival_table <- data.frame(c1 = c(input$with, input$against,"overall"),
-                                                c2 = c(
-                                                  round(mean(tbl[tbl$strata == input$with,5]),2),
-                                                  round(mean(tbl[tbl$strata == input$against,5]),2),
-                                                  round(mean(tbl$surv),2)
-                                                ),
-                                                c3 = c(
-                                                  round(mean(tbl[tbl$strata == input$with,6]),2),
-                                                  round(mean(tbl[tbl$strata == input$against,6]),2),
-                                                  round(mean(tbl$std.err),2)
-                                                ),
-                                                c4 = c(
-                                                  round(mean(tbl[tbl$strata == input$with,10]),2),
-                                                  round(mean(tbl[tbl$strata == input$against,10]),2),
-                                                  round(mean(tbl$lower),2)
-                                                ),
-                                                c5 = c(
-                                                  round(mean(tbl[tbl$strata == input$with,11]),2),
-                                                  round(mean(tbl[tbl$strata == input$against,11]),2),
-                                                  round(mean(tbl$upper),2)
-                                                ))
-              
-              names(mean_survival_table) = c(factors,"Estimate", "Std.Error", "Lower bound", "Upper bound")
-              
-              output$mean_table_heading <- renderUI({
-                h3("Means of survival Times")
-              })
-              
-              output$mean_table <- renderDataTable({
-                return(mean_survival_table)
-              })
-  
-              # Medians of survival table
-              tbl_sorted = tbl[order(tbl$surv, tbl$std.err, tbl$lower, tbl$upper),]
-              median_survival_table <- data.frame(c1 = c(input$with, input$against,"overall"),
-                                                c2 = c(
-                                                  round(median(tbl_sorted[tbl_sorted$strata == input$with,5]),2),
-                                                  round(median(tbl_sorted[tbl_sorted$strata == input$against,5]),2),
-                                                  round(median(tbl_sorted$surv),2)
-                                                ),
-                                                c3 = c(
-                                                  round(median(tbl_sorted[tbl_sorted$strata == input$with,6]),2),
-                                                  round(median(tbl_sorted[tbl_sorted$strata == input$against,6]),2),
-                                                  round(median(tbl_sorted$std.err),2)
-                                                ),
-                                                c4 = c(
-                                                  round(median(tbl_sorted[tbl_sorted$strata == input$with,10]),2),
-                                                  round(median(tbl_sorted[tbl_sorted$strata == input$against,10]),2),
-                                                  round(median(tbl_sorted$lower),2)
-                                                ),
-                                                c5 = c(
-                                                  round(median(tbl_sorted[tbl_sorted$strata == input$with,11]),2),
-                                                  round(median(tbl_sorted[tbl_sorted$strata == input$against,11]),2),
-                                                  round(median(tbl_sorted$upper),2)
-                                                ))
-              
-              names(median_survival_table) = c(factors,"Estimate", "Std.Error", "Lower bound", "Upper bound")
-              
-              output$median_table_heading <- renderUI({
-                h3("Medians of survival Times")
-              })
-              
-              output$median_table <- renderDataTable({
-                return(median_survival_table)
-              })
-              
-              # plot heading
-              output$plot_heading <- renderUI({
-                h3("Survival plot")
-              })
-              
-              uiValues$km_plot <- ggsurvplot(fit = Survfit, 
-                                          data = finalized_data,
-                                          ####### Format Title #######
-                                          title = "Overall Survival",
-                                          subtitle = "Stratified By Mutations",
-                                          pval = T,
-                                          pval.method = T,
-                                          font.title = c(22, "bold", "black"),
-                                          ggtheme = theme_classic() + theme(plot.title = element_text(hjust = 0.5, face = "bold"))+ # theme_classic will give a white background with no lines on the plot
-                                            theme(plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic")), 
-                                          ####### Format Axes #######
-                                          xlab="Months", # changes xlabel,
-                                          ylab = "Survival Probability",
-                                          font.x=c(18,"bold"), # changes x axis labels
-                                          font.y=c(18,"bold"), # changes y axis labels
-                                          font.xtickslab=c(14,"plain"), # changes the tick label on x axis
-                                          font.ytickslab=c(14,"plain"),
-                                          ####### Format Curve Lines #######
-                                          palette = c("red","black"),
-                                          ####### Censor Details ########
-                                          censor = TRUE, # logical value. If TRUE, censors will be drawn,
-                                          censor.shape="|",
-                                          censor.size = 5,
-                                          ####### Confidence Intervals ########
-                                          conf.int = FALSE, # To Remove conf intervals use "FALSE"
-                                          conf.int.fill = "purple", # fill color to be used for confidence interval
-                                          surv.median.line = "hv", # allowed values include one of c("none", "hv", "h", "v"). v: vertical, h:horizontal
-                                          ######## Format Legend #######
-                                          legend = "top", # If you'd prefer more space for your plot, consider removing the legend
-                                          #legend.title = "All Patients",
-                                          legend.labs = c(input$with,input$against), # Change the Strata Legend
-                                          ######## Risk Table #######
-                                          risk.table = TRUE, # Adds Risk Table
-                                          risk.table.height = 0.25 # Adjusts the height of the risk table (default is 0.25)
-              )
-              uiValues$km_plot$plot <- uiValues$km_plot$plot + scale_x_continuous(expand=c(0,0))
-              
-              output$kaplan_meier_plot <- renderPlot({
-                if(is.null(uiValues$km_plot))
-                {
-                    return()
-                }
-                else
-                {
-                  uiValues$km_plot
-                }
-              })
+          
+          time_data <- finalized_data$time
+          status_data <- finalized_data$status
+          #factor_data = str_split(finalized_data$factors,"_",simplify = T)[,1]
+          factor_data <- as.factor(finalized_data$factors)
+          survival <- Surv(time = time_data, event = status_data)
+          Survfit <- do.call(survfit,list(formula = Surv(time = time_data, event = status_data) ~ factor_data, data = finalized_data))
+          #Survfit <- survfit(survival ~ factor_data, data = finalized_data)
+          res <- summary(Survfit)
+          
+          cols <- lapply(c(2:10,15,16) , function(x) res[x])
+          tbl <- do.call(data.frame, cols)
+          head(tbl)
+          tbl$strata <- str_split(as.character(tbl$strata),"=",simplify = T)[,2]
+          
+          output$summary_table_heading <- renderUI({
+            h3("Survival analysis summary")
+          })
+          
+          output$survivalSummary <- renderDataTable({
+            return(tbl)
+          })
+          
+          # Mean of survival table
+          mean_survival_table <- data.frame(c1 = c(input$with, input$against,"overall"),
+                                            c2 = c(
+                                              round(mean(tbl[tbl$strata == input$with,5]),2),
+                                              round(mean(tbl[tbl$strata == input$against,5]),2),
+                                              round(mean(tbl$surv),2)
+                                            ),
+                                            c3 = c(
+                                              round(mean(tbl[tbl$strata == input$with,6]),2),
+                                              round(mean(tbl[tbl$strata == input$against,6]),2),
+                                              round(mean(tbl$std.err),2)
+                                            ),
+                                            c4 = c(
+                                              round(mean(tbl[tbl$strata == input$with,10]),2),
+                                              round(mean(tbl[tbl$strata == input$against,10]),2),
+                                              round(mean(tbl$lower),2)
+                                            ),
+                                            c5 = c(
+                                              round(mean(tbl[tbl$strata == input$with,11]),2),
+                                              round(mean(tbl[tbl$strata == input$against,11]),2),
+                                              round(mean(tbl$upper),2)
+                                            ))
+          
+          names(mean_survival_table) = c(factors,"Estimate", "Std.Error", "Lower bound", "Upper bound")
+          
+          output$mean_table_heading <- renderUI({
+            h3("Means of survival Times")
+          })
+          
+          output$mean_table <- renderDataTable({
+            return(mean_survival_table)
+          })
+          
+          # Medians of survival table
+          tbl_sorted = tbl[order(tbl$surv, tbl$std.err, tbl$lower, tbl$upper),]
+          median_survival_table <- data.frame(c1 = c(input$with, input$against,"overall"),
+                                              c2 = c(
+                                                round(median(tbl_sorted[tbl_sorted$strata == input$with,5]),2),
+                                                round(median(tbl_sorted[tbl_sorted$strata == input$against,5]),2),
+                                                round(median(tbl_sorted$surv),2)
+                                              ),
+                                              c3 = c(
+                                                round(median(tbl_sorted[tbl_sorted$strata == input$with,6]),2),
+                                                round(median(tbl_sorted[tbl_sorted$strata == input$against,6]),2),
+                                                round(median(tbl_sorted$std.err),2)
+                                              ),
+                                              c4 = c(
+                                                round(median(tbl_sorted[tbl_sorted$strata == input$with,10]),2),
+                                                round(median(tbl_sorted[tbl_sorted$strata == input$against,10]),2),
+                                                round(median(tbl_sorted$lower),2)
+                                              ),
+                                              c5 = c(
+                                                round(median(tbl_sorted[tbl_sorted$strata == input$with,11]),2),
+                                                round(median(tbl_sorted[tbl_sorted$strata == input$against,11]),2),
+                                                round(median(tbl_sorted$upper),2)
+                                              ))
+          
+          names(median_survival_table) = c(factors,"Estimate", "Std.Error", "Lower bound", "Upper bound")
+          
+          output$median_table_heading <- renderUI({
+            h3("Medians of survival Times")
+          })
+          
+          output$median_table <- renderDataTable({
+            return(median_survival_table)
+          })
+          
+          # plot heading
+          output$plot_heading <- renderUI({
+            h3("Survival plot")
+          })
+          
+          uiValues$km_plot <- ggsurvplot(fit = Survfit, 
+                                         data = finalized_data,
+                                         ####### Format Title #######
+                                         title = "Overall Survival",
+                                         subtitle = "Stratified By Mutations",
+                                         pval = T,
+                                         pval.method = T,
+                                         font.title = c(22, "bold", "black"),
+                                         ggtheme = theme_classic() + theme(plot.title = element_text(hjust = 0.5, face = "bold"))+ # theme_classic will give a white background with no lines on the plot
+                                           theme(plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic")), 
+                                         ####### Format Axes #######
+                                         xlab="Months", # changes xlabel,
+                                         ylab = "Survival Probability",
+                                         font.x=c(18,"bold"), # changes x axis labels
+                                         font.y=c(18,"bold"), # changes y axis labels
+                                         font.xtickslab=c(14,"plain"), # changes the tick label on x axis
+                                         font.ytickslab=c(14,"plain"),
+                                         ####### Format Curve Lines #######
+                                         palette = c("red","black"),
+                                         ####### Censor Details ########
+                                         censor = TRUE, # logical value. If TRUE, censors will be drawn,
+                                         censor.shape="|",
+                                         censor.size = 5,
+                                         ####### Confidence Intervals ########
+                                         conf.int = FALSE, # To Remove conf intervals use "FALSE"
+                                         conf.int.fill = "purple", # fill color to be used for confidence interval
+                                         surv.median.line = "hv", # allowed values include one of c("none", "hv", "h", "v"). v: vertical, h:horizontal
+                                         ######## Format Legend #######
+                                         legend = "top", # If you'd prefer more space for your plot, consider removing the legend
+                                         #legend.title = "All Patients",
+                                         legend.labs = c(input$with,input$against), # Change the Strata Legend
+                                         ######## Risk Table #######
+                                         risk.table = TRUE, # Adds Risk Table
+                                         risk.table.height = 0.25 # Adjusts the height of the risk table (default is 0.25)
+          )
+          uiValues$km_plot$plot <- uiValues$km_plot$plot + scale_x_continuous(expand=c(0,0))
+          
+          output$kaplan_meier_plot <- renderPlot({
+            if(is.null(uiValues$km_plot))
+            {
+              return()
+            }
+            else
+            {
+              uiValues$km_plot
+            }
+          })
         }
     })
     
     # Comparing mutations
     observeEvent(input$factor,{
-        if(input$factor[1] != "Select a field" & input$factor[1] != 1)
+        if(input$factor[1] != "Select a field")
         {
             output$with <- renderUI({
                 req(input$file1)
@@ -396,13 +399,12 @@ server <- function(input, output) {
                                     choices = dataFields)
                     },
                     error = function(e){
-                      print("Inside error")
                         stop(safeError(e))
                     }
                 )
             })
         }
-    })
+    }, ignoreInit = TRUE, ignoreNULL = FALSE)
     
     ## Select input for "Against"
     observeEvent(input$with,{
@@ -426,7 +428,7 @@ server <- function(input, output) {
                 )
             })
         }
-    })
+    }, ignoreInit = TRUE,ignoreNULL = FALSE)
 }
 
 # Run the application 
