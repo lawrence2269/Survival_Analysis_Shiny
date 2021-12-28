@@ -33,4 +33,7 @@ An application develped in RShiny for performing survival analysis. My lab colle
   </ul>
 </ul>
 <br>
-
+<h3> Input screenshots </h3>
+<img src="/assets/Input_1.JPG" width="50%">
+<img src="/assets/Input_2.JPG" width="50%">
+<img src="/assets/Input_3.JPG" width="50%">
