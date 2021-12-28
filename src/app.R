@@ -117,8 +117,8 @@ server <- function(input, output, session) {
         else
         {
             df <- read.csv(input$file1$datapath)
-            enable("submit")
-            enable("reset")
+            # enable("submit")
+            # enable("reset")
             df
         }
     })
