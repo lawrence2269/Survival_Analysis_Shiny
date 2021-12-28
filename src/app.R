@@ -92,20 +92,35 @@ server <- function(input, output, session) {
     })
     
     # Displaying data in a table
-    output$contents <- renderDataTable({
-        req(input$file1)
-        
-        tryCatch(
-            {
-                df <- read.csv(input$file1$datapath)
-                enable("submit")
-                enable("reset")
-            },
-            error = function(e){
-                stop(safeError(e))
-            }
-        )
-        return(df)
+    # output$contents <- renderDataTable({
+    #     req(input$file1)
+    #     
+    #     tryCatch(
+    #         {
+    #             df <- read.csv(input$file1$datapath)
+    #             enable("submit")
+    #             enable("reset")
+    #         },
+    #         error = function(e){
+    #             stop(safeError(e))
+    #         }
+    #     )
+    #     return(df)
+    # })
+    
+    myData <- reactive({
+        inputFile <- input$file1
+        if(is.null(inputFile))
+        {
+            return(NULL)
+        }
+        else
+        {
+            df <- read.csv(input$file1$datapath)
+            enable("submit")
+            enable("reset")
+            df
+        }
     })
     
     # Select input for time
@@ -164,10 +179,21 @@ server <- function(input, output, session) {
     
     # Reset action
     observeEvent(input$reset,{
-        output$contents = renderDataTable(NULL)
+        #output$contents = renderDataTable(NULL)
+        removeUI(selector = "#summary_table_heading")
+        removeUI(selector = "#mean_table_heading")
+        removeUI(selector = "#median_table_heading")
+        removeUI(selector = "#survivalSummary")
+        removeUI(selector = "#contents")
+        removeUI(selector = "#mean_table")
+        removeUI(selector = "#median_table")
+        removeUI(selector = "#plot_heading")
+        output$kaplan_meier_plot <- NULL
         updateSelectInput(session,"time",selected = "Select a field")
         updateSelectInput(session,"status",selected = "Select a field")
         updateSelectInput(session,"factor",selected = "Select a field")
+        updateSelectInput(session,"with",selected = "Select a field")
+        updateSelectInput(session,"against",selected = "Select a field")
     })
     
     # Submit action
@@ -195,7 +221,6 @@ server <- function(input, output, session) {
         else
         {
           # Reading and getting individual columns.
-          print("Inside else")
           df <- read.csv(input$file1$datapath)
           time <- as.character(input$time)
           status <- as.character(input$status)
@@ -211,28 +236,28 @@ server <- function(input, output, session) {
           final_data <- data.frame(time = time_data,
                                   status = status_data,
                                   factors = factors_data)
-          if(factors == 1)
-          {
-            time_data <- final_data$time
-            status_data <- final_data$status
-            factor_data <- as.factor(final_data$factors)
-            survival <- Surv(time = time_data, event = status_data)
-            Survfit <- do.call(survfit,list(formula = Surv(time = time_data, event = status_data) ~ factor_data, data = final_data))
-            res <- summary(Survfit)
-            
-            cols <- lapply(c(2:10,15,16) , function(x) res[x])
-            tbl <- do.call(data.frame, cols)
-            head(tbl)
-            tbl$strata <- str_split(as.character(tbl$strata),"=",simplify = T)[,2]
-            
-            output$summary_table_heading <- renderUI({
-              h3("Survival analysis summary")
-            })
-            
-            output$survivalSummary <- renderDataTable({
-              return(tbl)
-            })
-          }
+          # if(factors == 1)
+          # {
+          #   time_data <- final_data$time
+          #   status_data <- final_data$status
+          #   factor_data <- as.factor(final_data$factors)
+          #   survival <- Surv(time = time_data, event = status_data)
+          #   Survfit <- do.call(survfit,list(formula = Surv(time = time_data, event = status_data) ~ factor_data, data = final_data))
+          #   res <- summary(Survfit)
+          #   
+          #   cols <- lapply(c(2:10,15,16) , function(x) res[x])
+          #   tbl <- do.call(data.frame, cols)
+          #   head(tbl)
+          #   tbl$strata <- str_split(as.character(tbl$strata),"=",simplify = T)[,2]
+          #   
+          #   output$summary_table_heading <- renderUI({
+          #     h3("Survival analysis summary")
+          #   })
+          #   
+          #   output$survivalSummary <- renderDataTable({
+          #     return(tbl)
+          #   })
+          # }
           finalized_data <- final_data %>% select(time,
                                                  status,
                                                  factors) %>%
@@ -399,7 +424,7 @@ server <- function(input, output, session) {
                                     choices = dataFields)
                     },
                     error = function(e){
-                        stop(safeError(e))
+                        message("error:\n", e)
                     }
                 )
             })
@@ -423,7 +448,7 @@ server <- function(input, output, session) {
                                     choices = dataFields)
                     },
                     error = function(e){
-                        stop(safeError(e))
+                        message("error:\n", e)
                     }
                 )
             })
