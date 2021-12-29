@@ -43,16 +43,15 @@ ui <- fluidPage(
                 uiOutput("factor"),
                 conditionalPanel(
                   condition = "input.factor != 1",
-                  uiOutput("with"),
-                  uiOutput("against")
+                  hidden(uiOutput("with")),
+                  hidden(uiOutput("against"))
                 )),
+            
             div(style="",
-                disabled(actionButton("submit", label = "Submit", 
+                actionButton("submit", label = "Submit", 
+                                      style="background-color: #337ab7;"),
+                actionButton("reset",label = "Reset",
                                       style="background-color: #337ab7;")),
-                disabled(actionButton("reset",label = "Reset",
-                                      style="background-color: #337ab7;"))),
-            # disabled(actionButton("submit", label = "Submit", 
-            #              style="background-color: #337ab7;"))
         ),
 
         # Show a plot of the generated distribution
@@ -81,47 +80,17 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
     
-    uiValues <- reactiveValues(km_plot = NULL)
+    # Adding upload data to reactive state
+    uiValues <- reactiveValues(km_plot = NULL,
+                               fileData = NULL)
   
     observe({
         if(!is.null(input$file1$datapath))
         {
-            enable("submit")
-            enable("reset")
+            uiValues$fileData <- read.csv(input$file1$datapath)
         }
     })
     
-    # Displaying data in a table
-    # output$contents <- renderDataTable({
-    #     req(input$file1)
-    #     
-    #     tryCatch(
-    #         {
-    #             df <- read.csv(input$file1$datapath)
-    #             enable("submit")
-    #             enable("reset")
-    #         },
-    #         error = function(e){
-    #             stop(safeError(e))
-    #         }
-    #     )
-    #     return(df)
-    # })
-    
-    myData <- reactive({
-        inputFile <- input$file1
-        if(is.null(inputFile))
-        {
-            return(NULL)
-        }
-        else
-        {
-            df <- read.csv(input$file1$datapath)
-            # enable("submit")
-            # enable("reset")
-            df
-        }
-    })
     
     # Select input for time
     output$time <- renderUI({
@@ -165,7 +134,7 @@ server <- function(input, output, session) {
         tryCatch(
             {
                 df <- read.csv(input$file1$datapath)
-                dataFields <- c("Select a field","1")
+                dataFields <- c("Select a field")
                 dataFields <- append(dataFields,colnames(df))
                 selectInput("factor",
                             label = h3("Factor"),
@@ -177,9 +146,23 @@ server <- function(input, output, session) {
         )
     })
     
+    
+    # Select input for with
+    output$with <- renderUI({
+      tryCatch(
+        {
+          selectInput("withFactors",
+                      label = h3("With"),
+                      choices = NULL)
+        },
+        error = function(e){
+          stop(safeError(e))
+        }
+      )
+    })
+    
     # Reset action
     observeEvent(input$reset,{
-        #output$contents = renderDataTable(NULL)
         removeUI(selector = "#summary_table_heading")
         removeUI(selector = "#mean_table_heading")
         removeUI(selector = "#median_table_heading")
@@ -198,7 +181,11 @@ server <- function(input, output, session) {
     
     # Submit action
     observeEvent(input$submit,{
-        if(input$time == "Select a field")
+        if(is.null(input$file1))
+        {
+          shinyalert("Please select a file", type = "error")
+        }
+        else if(input$time == "Select a field")
         {
           shinyalert("Please choose an option for 'Time'", type = "error")
         }
@@ -227,37 +214,13 @@ server <- function(input, output, session) {
           factors <- as.character(input$factor)
           
           time_data <- df[,time]
-          # status_data = as.factor(df[,status])
-          # factors_data = as.factor(df[,factors])
-          
           status_data <- df[,status]
           factors_data <- df[,factors]
           
           final_data <- data.frame(time = time_data,
                                   status = status_data,
                                   factors = factors_data)
-          # if(factors == 1)
-          # {
-          #   time_data <- final_data$time
-          #   status_data <- final_data$status
-          #   factor_data <- as.factor(final_data$factors)
-          #   survival <- Surv(time = time_data, event = status_data)
-          #   Survfit <- do.call(survfit,list(formula = Surv(time = time_data, event = status_data) ~ factor_data, data = final_data))
-          #   res <- summary(Survfit)
-          #   
-          #   cols <- lapply(c(2:10,15,16) , function(x) res[x])
-          #   tbl <- do.call(data.frame, cols)
-          #   head(tbl)
-          #   tbl$strata <- str_split(as.character(tbl$strata),"=",simplify = T)[,2]
-          #   
-          #   output$summary_table_heading <- renderUI({
-          #     h3("Survival analysis summary")
-          #   })
-          #   
-          #   output$survivalSummary <- renderDataTable({
-          #     return(tbl)
-          #   })
-          # }
+          
           finalized_data <- final_data %>% select(time,
                                                  status,
                                                  factors) %>%
@@ -266,11 +229,9 @@ server <- function(input, output, session) {
           
           time_data <- finalized_data$time
           status_data <- finalized_data$status
-          #factor_data = str_split(finalized_data$factors,"_",simplify = T)[,1]
           factor_data <- as.factor(finalized_data$factors)
           survival <- Surv(time = time_data, event = status_data)
           Survfit <- do.call(survfit,list(formula = Surv(time = time_data, event = status_data) ~ factor_data, data = finalized_data))
-          #Survfit <- survfit(survival ~ factor_data, data = finalized_data)
           res <- summary(Survfit)
           
           cols <- lapply(c(2:10,15,16) , function(x) res[x])
@@ -409,51 +370,46 @@ server <- function(input, output, session) {
     })
     
     # Comparing mutations
-    observeEvent(input$factor,{
-        if(input$factor[1] != "Select a field")
-        {
-            output$with <- renderUI({
-                req(input$file1)
-                tryCatch(
-                    {
-                        df <- read.csv(input$file1$datapath)
-                        dataFields <- c("Select a field")
-                        dataFields <- append(dataFields,df[,input$factor[1]])
-                        selectInput("with",
-                                    label = h4("With"),
-                                    choices = dataFields)
-                    },
-                    error = function(e){
-                        message("error:\n", e)
-                    }
-                )
-            })
-        }
-    }, ignoreInit = TRUE, ignoreNULL = FALSE)
+    # Select inputs for with
+    output$with <- renderUI({
+      df <- uiValues$fileData
+      if(input$factor == "Select a field" || input$factor == "1")
+      {
+        return(NULL)
+      }
+      else
+      {
+        dataFields <- c("Select a field")
+        col_values = unique(df[,input$factor[1]])
+        dataFields <- append(dataFields,col_values)
+        selectInput("with",
+                    label = h4("With"),
+                    choices = dataFields)
+      }
+    })
     
-    ## Select input for "Against"
-    observeEvent(input$with,{
-        if(input$with[1] != "Select a field")
-        {
-            output$against <- renderUI({
-                req(input$file1)
-                tryCatch(
-                    {
-                        df <- read.csv(input$file1$datapath)
-                        dataFields <- c("Select a field")
-                        dataFields <- append(dataFields,df[,input$factor[1]])
-                        dataFields <- dataFields[!dataFields %in% c(input$with)]
-                        selectInput("against",
-                                    label = h4("Against"),
-                                    choices = dataFields)
-                    },
-                    error = function(e){
-                        message("error:\n", e)
-                    }
-                )
-            })
-        }
-    }, ignoreInit = TRUE,ignoreNULL = FALSE)
+    # Select inputs for with
+    output$against <- renderUI({
+      df <- uiValues$fileData
+      if(input$with == "Select a field")
+      {
+        return(NULL)
+      }
+      else
+      {
+        dataFields <- c("Select a field")
+        col_values = unique(df[,input$factor[1]])
+        dataFields <- append(dataFields,col_values)
+        dataFields <- dataFields[!dataFields %in% c(input$with)]
+        selectInput("against",
+                    label = h4("Against"),
+                    choices = dataFields)
+      }
+    })
+    
+    # Based on the change in factors and with dropdown hidden UI elements are shown
+    observeEvent(input$factor,{show("with")},ignoreInit = T)
+    observeEvent(input$with,{show("against")},ignoreInit = T)
 }
 
 # Run the application 
