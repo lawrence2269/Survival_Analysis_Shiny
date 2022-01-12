@@ -100,7 +100,8 @@ server <- function(input, output, session) {
             {
                 df <- read.csv(input$file1$datapath)
                 dataFields <- c("Select a field")
-                dataFields <- append(dataFields,colnames(df))
+                column_names <- sort(colnames(df))
+                dataFields <- append(dataFields,column_names)
                 selectInput("time",
                                    label = h3("Time"),
                                    choices = dataFields)
@@ -118,7 +119,8 @@ server <- function(input, output, session) {
             {
                 df <- read.csv(input$file1$datapath)
                 dataFields <- c("Select a field")
-                dataFields <- append(dataFields,colnames(df))
+                column_names <- sort(colnames(df))
+                dataFields <- append(dataFields,column_names)
                 selectInput("status",
                             label = h3("Status"),
                             choices = dataFields)
@@ -136,7 +138,8 @@ server <- function(input, output, session) {
             {
                 df <- read.csv(input$file1$datapath)
                 dataFields <- c("Select a field")
-                dataFields <- append(dataFields,colnames(df))
+                column_names <- sort(colnames(df))
+                dataFields <- append(dataFields,column_names)
                 selectInput("factor",
                             label = h3("Factor"),
                             choices = dataFields)
